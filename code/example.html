@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Gantt Chart Example 1</title>
+<link type="text/css" href="http://mbostock.github.io/d3/style.css" rel="stylesheet" />
+<link type="text/css" href="example.css" rel="stylesheet" />
+</head>
+<body>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+	<script src="//d3js.org/d3.v3.min.js"></script>
+	<script type="text/javascript" src="gantt-chart-d3.js"></script>
+	<script>
+    
+	var base_url = "./api/";
+	var tasks = [];
+
+$.ajax({
+	  url: base_url + "sync",
+	  dataType: "json",
+	  success: function(response) {
+			tasks = response;
+			for(idx in tasks) {
+				tasks[idx].startDate = new Date(tasks[idx].startDate);	
+				tasks[idx].endDate = new Date(tasks[idx].endDate);
+			}
+			//example();
+			showSums();
+	  }
+});
+
+function showSums() {
+	var array = [];
+	var sum = 0;
+	var lastTaskName;
+	for(idx in tasks) {
+		if(tasks[idx].taskName == "Sync-Punkte") continue;
+		if(tasks[idx].taskName == "Person 1") lastTaskName = tasks[idx].taskName;
+		if(lastTaskName && tasks[idx].taskName != lastTaskName) {
+			lastTaskName = tasks[idx].taskName;
+			min = (sum/1000/60) << 0;
+   			sec = (sum/1000) % 60;
+			array.push(tasks[idx].taskName+" -> "+min+":"+sec);
+			sum = 0;
+		}
+		var differenceMillis = tasks[idx].endDate.getTime() - tasks[idx].startDate.getTime();
+		sum = sum + differenceMillis;
+		console.log(sum);
+		if(idx == tasks.length-1) {
+			min = (sum/1000/60) << 0;
+   			sec = (sum/1000) % 60;
+			array.push(tasks[idx].taskName+" -> "+min+":"+sec);	
+		}
+	}
+	console.log(array);
+}
+
+function example() {
+console.log(tasks);
+//var tasks = [
+//{"startDate":new Date("Sun Dec 09 01:36:45 EST 2012"),"endDate":new Date("Sun Dec 09 02:36:45 EST 2012"),"taskName":"E Job","status":"RUNNING"},
+//{"startDate":new Date("Sun Dec 09 04:56:32 EST 2012"),"endDate":new Date("Sun Dec 09 06:35:47 EST 2012"),"taskName":"A Job","status":"RUNNING"}];
+
+var taskStatus = {
+    "SUCCEEDED" : "bar",
+    "FAILED" : "bar-failed",
+    "RUNNING" : "bar-running",
+    "KILLED" : "bar-killed"
+};
+
+var taskNames = [ "Sync-Punkte", "Person 1", "Person 2", "Person 3", "Person 4", "Person 5", "Person 6", "Person 7", "Person 8" ];
+
+tasks.sort(function(a, b) {
+    return a.endDate - b.endDate;
+});
+var maxDate = tasks[tasks.length - 1].endDate;
+tasks.sort(function(a, b) {
+    return a.startDate - b.startDate;
+});
+var minDate = tasks[0].startDate;
+
+var format = "%H:%M";
+
+var gantt = d3.gantt().taskTypes(taskNames).taskStatus(taskStatus).tickFormat(format);
+gantt.timeDomainMode("fixed");
+gantt.timeDomain([new Date("2016-01-01 00:00:00"), new Date("2016-01-01 00:13:18")]);
+gantt(tasks);
+};	
+    </script>
+</body>
+</html>

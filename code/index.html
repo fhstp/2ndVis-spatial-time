@@ -1,0 +1,757 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, maximum-scale=1, width=device-width">
+    <meta charset="utf-8">
+    <title>DA Visualisierung</title>
+  </head>
+  <body>
+ 	<div id="overviewMap"></div>
+    <div id="syncStart">Sync starten? <button onClick="startSync()" style="width:30%;height:100%" >JA</button> <button onClick='hideSyncStartDialog()' style="width:30%;height:100%">NEIN</button></div>
+  	<div id="syncOverlay"></div>
+  	<div id="loadingOverlay"></div>
+    <div id="detailOverlay"></div>
+    <div id="sumOverlay">
+    	<div class='backButton' onClick='hideSumOverlay()'>&#10094; ZURÜCK</div>
+        <div id="barchartTitel" class="titel"></div>
+        <div id="barchartDateRange" class="divRangeDate"></div>
+        <div class="d3_barchart"></div>
+    </div>
+    <div id="map"></div>
+    <div class="d3_chart"></div>
+    <div id="d3_slider"></div>
+    <div id="legend"></div>
+ 
+ 	<link rel="stylesheet" href="css/da.css">
+    <link rel="stylesheet" href="css/d3.slider.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+    <script src="//d3js.org/d3.v3.min.js"></script>
+    <script src="lib/d3-legend.min.js"></script>
+    <script src="lib/d3.slider.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    
+	<script>
+	// Load the Google Visualization API
+    google.charts.load('current', {'packages':['corechart']});
+	//google.charts.setOnLoadCallback(initTopRightControl);
+	var centerOfIraqSyria = {lat: 32.492436, lng: 41.881878};
+	var startZoom = 4;
+	var startZoom_OverviewMap = 3;
+	var syncZoom = 8;
+	var base_url = "./api/events/";
+	//var colors = {civ:'#ffd200', unk:'#0066cc', is:'#000000', geg:'#009100'}
+	var colors = {civ:'#ffcc33', unk:'#4575b4', is:'#000000', geg:'#fc8d59'} //colorblind safe
+	var colorrange = [colors.is, colors.geg, colors.civ, colors.unk];
+	var accentColor = '#ff3333';
+	var format = d3.time.format("%Y-%m-%d");
+	// 1 Monat Brush
+	var initRangeDateString = "2010-01-01_2010-01-31"; //2004-03-17 date of first event in is data
+	var initFromDateString = "2010-01-01";
+	var fromDateString = initFromDateString;
+	var toDateString = "2010-01-31";
+	var sollBrushAbstand = 30; // 1 Monat Brush
+	// 1/2 Jahr Brush
+//	var initRangeDateString = "2004-03-17_2004-09-17"; //2004-03-17 date of first event in is data
+//	var initFromDateString = "2004-03-17";
+//	var fromDateString = initFromDateString;
+//	var toDateString = "2004-09-17"; // if changed also change days width between from and to in brushed()!
+//	var sollBrushAbstand = 184; // 1/2 Jahr Brush
+	// 1 Jahr Brush
+//	var initRangeDateString = "2004-03-17_2005-03-17"; //2004-03-17 date of first event in is data
+//	var initFromDateString = "2004-03-17";
+//	var fromDateString = initFromDateString;
+//	var toDateString = "2005-03-17"; //if changed also change days width between from and to in brushed()!
+//	var sollBrushAbstand = 365;
+	var syncs = [
+	//{"minutes":0, "seconds":58, "dokuText":"Ende 2011 verlassen die amerikanischen Truppen schließlich den Irak.", "date":"2011-12-15", "location":"Irak", "lat":null, "lng":null},
+//{"minutes":7, "seconds":57, "dokuText":"Als die Amerikaner Ende 2011 den Irak verließen, war der sunitische Aufstand gebrochen.", "date":"2011-12-15", "location":"Irak", "lat":null, "lng":null},
+//{"minutes":8, "seconds":55, "dokuText":"Im Sommer 2011 schickt er (Baghdadi) ein paar Männer nach Syrien, die dort mit den Rebellen die schiitische Regierung Assad bekämpfen sollen.", "date":"2011-07-31", "location":"Syrien", "lat":null, "lng":null},
+//{"minutes":10, "seconds":47, "dokuText":"Im Irak gehen Malikis Säuberungsaktionen weiter. Im Dezember 2012 lässt er die Polizei gegen die Leibwächter des sunnitischen Finanzministers Rafi al-Issawi vorgehen.", "date":"2012-12-15", "location":"Irak", "lat":null, "lng":null}, 
+//*EXPERT REVIEW HIER 1.Sync-Punkt//{"minutes":19, "seconds":2, "dokuText":"Im März 2013 tauchen plötzlich schwarze Al-Qaida Flaggen bei den Protesten in Ramadi auf.", "date":"2013-03-01", "location":"Ramadi", "lat":"33.42056", "lng":"43.307779"},
+///{"minutes":19, "seconds":47, "dokuText":"April 2013. In einem sunnitischen Protestcamp in Hawija kommt es zur Konfrontation.", "date":"2013-04-01", "location":"Hawija", "lat":"35.324934", "lng":"43.768621"},
+///{"minutes":21, "seconds":20, "dokuText":"Sie hatten 2010 für eine neue Regierung in Bagdad gestimmt.", "date":"2010-01-01", "location":"Bagdad", "lat":"33.340582", "lng":"44.400876"},
+///{"minutes":22, "seconds":48, "dokuText":"Drei Monate nach den Ereignissen von Hawija, gelingt den ISIS Milizen ein spektakulärer Angriff am Stadtrand von Bagdad.", "date":"2013-07-01", "location":"Bagdad", "lat":"33.340582", "lng":"44.400876"},
+{"minutes":0, "seconds":47, "dokuText":"April 2013. In einem sunnitischen Protestcamp in Hawija kommt es zur Konfrontation.", "date":"2013-04-01", "location":"Hawija", "lat":"35.324934", "lng":"43.768621"},
+{"minutes":2, "seconds":20, "dokuText":"Sie hatten 2010 für eine neue Regierung in Bagdad gestimmt.", "date":"2010-01-01", "location":"Bagdad", "lat":"33.340582", "lng":"44.400876"},
+{"minutes":3, "seconds":48, "dokuText":"Drei Monate nach den Ereignissen von Hawija, gelingt den ISIS Milizen ein spektakulärer Angriff am Stadtrand von Bagdad.", "date":"2013-07-01", "location":"Bagdad", "lat":"33.340582", "lng":"44.400876"},
+//ORT PASST NICHT//{"minutes":24, "seconds":9, "dokuText":"Ende Oktober 2013 macht sich Maliki kleinlaut auf dem Weg nach Washington.", "date":"2013-10-31", "location":"Irak", "lat":null, "lng":null},
+//KEIN ORT//{"minutes":25, "seconds":44, "dokuText":"Im Dezember 2013 schlägt Maliki erneut zu.", "date":"2013-12-01", "location":"Irak", "lat":null, "lng":null},
+{"minutes":27, "seconds":17, "dokuText":"Kapitel 1 des Irakkrieges 2014 beginnt.", "date":"2014-01-01", "location":"Irak", "lat":null, "lng":null},
+{"minutes":29, "seconds":30, "dokuText":"Am 6.Juni 2014 schickt ISIS mehrere Selbstmordattentäter mit Autobomben ins Zentrum von Mossul.", "date":"2014-06-01", "location":"Mossul", "lat":"36.335", "lng":"43.118889"},
+{"minutes":30, "seconds":2, "dokuText":"Die Armee verschwindet am 10.Juni nahezu kampflos.", "date":"2014-06-01", "location":"Mossul", "lat":"36.335", "lng":"43.118889"}//,
+//test bis hierher 10min
+//{"minutes":32, "seconds":14, "dokuText":"Am 29.Juni 2014 ruft ISIS das Kalifat aus.", "date":"2014-06-29", "location":"Irak", "lat":null, "lng":null},
+//{"minutes":34, "seconds":0, "dokuText":"Am 4.Juli unternimmt der IS einen weiteren ungewöhnlichen Schritt.", "date":"2014-07-04", "location":"Mossul", "lat":"36.335", "lng":"43.118889"},
+//{"minutes":36, "seconds":20, "dokuText":"Im August 2014 demonstriert der IS militärische Stärke.", "date":"2014-08-15", "location":"Irak", "lat":null, "lng":null},
+//{"minutes":37, "seconds":55, "dokuText":"Am 14.August 2014 räumt Maliki das Feld und die USA verstärken ihre Luftangriffe.", "date":"2014-08-14", "location":"Irak", "lat":null, "lng":null}
+	];
+	var circles = [];
+	var markers = [];
+	var syncIdx = -1;
+	var goToMarker = false;
+	var months = ["Jänner", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+	var shortMonths = ["Jän", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+	var plusZahlenString = "IS +5297, Gegner +2236, Zivilisten +1920, Unbekannt +1644";
+	var map, eventsByLoc, eventsByDate, area, x_1, x_2, context, focus, brush, fromDate, toDate, lastExtent, xAxis, xhr, markerClusterer, goToMarkerPosition, request, deathsAllLocations, smallestDeathsAllLocations, rectangle, slider;
+	navigator.vibrate = navigator.vibrate || navigator.webkitVibrate || navigator.mozVibrate || navigator.msVibrate;
+	
+	hideSyncStartDialog() //hide Sync to Start dialog
+	hideSyncOverlay(); //jquery bug cannot show() if visible:hidden hardcoded in css
+	hideDetailOverlay(); //jquery bug cannot show() if visible:hidden hardcoded in css
+	hideSumOverlay(); //jquery bug cannot show() if visible:hidden hardcoded in css
+	drawSumBarChart(); //initial background load
+	initFocusGraph();
+	initLegend();
+	
+	
+function dateString(string, short, full) {	
+		var dateArray = string.split("-");
+		var monthString = short ? shortMonths[parseInt(dateArray[1])-1]+"." : months[parseInt(dateArray[1])-1];
+		if(full) return parseInt(dateArray[2])+"."+monthString+dateArray[0];
+		return monthString+" "+dateArray[0];
+}
+	
+	
+//******************************//
+//*** INIT MAP AND MAP DATA ***//
+//******************************//
+	function init() {
+		$.getScript("lib/richmarker-compiled.js", function( data, textStatus, jqxhr ) {
+			$.getScript("lib/markerclusterer.js", function( data, textStatus, jqxhr ) {
+				initMaps();
+				initMapData(initRangeDateString);
+			});
+		});
+	}
+	function initMaps() {
+		var height = document.body.clientHeight*0.7;
+		$('#loadingOverlay').height(height);
+		$('#map').height(height);
+	    map = new google.maps.Map(document.getElementById('map'), {
+			zoom: startZoom,
+			center: centerOfIraqSyria,
+			mapTypeId: google.maps.MapTypeId.TERRAIN,
+			disableDefaultUI: true,
+			//zoomControl:true,
+			scaleControl: true
+	  	});
+		// Ganze Ansicht Button
+		var centerControlDiv = document.createElement('div');
+		var centerControl = new CenterMapControl(centerControlDiv);
+		centerControl.index = 1;
+		map.controls[google.maps.ControlPosition.TOP_RIGHT].push(centerControl);
+		// Show Sum Button
+		var sumControlDiv = document.createElement('div');
+		var sumControl = new ShowSumControl(sumControlDiv);
+		sumControl.index = 1;
+		map.controls[google.maps.ControlPosition.TOP_LEFT].push(sumControl);
+		
+		//overview map
+		var myWidthHeight = 80;
+		$('#overviewMap').height(myWidthHeight);
+		$('#overviewMap').width(myWidthHeight);
+		$('#overviewMap').css({ top: (height-myWidthHeight-2)+'px' }); //-2px for border
+		overviewMap = new google.maps.Map(document.getElementById('overviewMap'), {
+			zoom: startZoom_OverviewMap,
+			center: centerOfIraqSyria,
+			mapTypeId: google.maps.MapTypeId.TERRAIN,
+			disableDefaultUI: true,
+			draggable: false,
+			disableDoubleClickZoom: true
+	  	});
+		rectangle = new google.maps.Rectangle();
+		// Get the current bounds, which reflect the bounds before the zoom.
+		map.addListener('zoom_changed', function() { updateOverviewMapRect() });
+		map.addListener('idle', function() { updateOverviewMapRect() });
+	}	
+	function updateOverviewMapRect() {
+		rectangle.setOptions({
+			strokeColor: '#d73027',
+			strokeOpacity: 0.8,
+			strokeWeight: 2,
+			fillColor: '#d73027',
+			fillOpacity: 0.35,
+			map: overviewMap,
+			bounds: map.getBounds()
+		});
+	}
+	// update map
+	function initMapData(dateRangeString) {
+		console.log("DA: load json for dateRange/"+dateRangeString);
+		console.log("URL: "+ base_url + "dateRange/" + dateRangeString);
+		if(xhr) xhr.abort();
+		$('#loadingOverlay').show();
+		xhr = $.ajax({
+			  url: base_url + "dateRange/" + dateRangeString,
+			  dataType: "json",
+			  success: function(response) {
+					console.log("DA: json contains "+response.byLoc.length+" byLoc-Objects + "+response.byDate.length+" byDate-Objects");
+					eventsByLoc = response.byLoc;
+					eventsByDate = response.byDate;
+					var smallest = null;
+					deathsAllLocations = 0;
+					smallestDeathsAllLocations = 0;
+					for (var idx in eventsByLoc) {
+						//sum only for smallest sum search
+						var sum = parseInt(eventsByLoc[idx].deaths_is) + parseInt(eventsByLoc[idx].deaths_geg) + parseInt(eventsByLoc[idx].deaths_civ) + parseInt(eventsByLoc[idx].deaths_unk);
+						if(!smallest) smallest = sum;
+						smallest = Math.min(sum, smallest);
+						//sum all
+						deathsAllLocations += parseInt(eventsByLoc[idx].deaths_is) + parseInt(eventsByLoc[idx].deaths_geg) + parseInt(eventsByLoc[idx].deaths_civ) + parseInt(eventsByLoc[idx].deaths_unk);
+					}
+					smallestDeathsAllLocations = smallest;
+					console.log("smallestDeathsAllLocations: "+smallestDeathsAllLocations);
+					console.log("deathsAllLocations: "+deathsAllLocations);
+					drawMarkers();				
+					$('#loadingOverlay').hide();
+			  },
+			  error: function(response){
+				  console.log("error");
+				  //console.log(response);
+				  console.log("DA error: "+response.responseText);
+			  }
+		});
+	}
+
+	
+//******************************//
+//*** SYNC WITH BROADCAST ***//
+//******************************//
+	function startSync() {
+		if(syncIdx == -1) {
+			alert("starte sync");
+			hideSyncStartDialog();
+		}
+		if(syncIdx == syncs.length) return;
+		window.setTimeout(function(){
+			syncIdx++;
+			if(navigator.vibrate) navigator.vibrate(200);
+			$('#syncOverlay').html("« "+syncs[syncIdx].dokuText+" »<br/><div class='myButton' id='yesButton' onClick='goToRange(syncs[syncIdx].date, syncs[syncIdx].lat, syncs[syncIdx].lng)'>&#10149; "+syncs[syncIdx].location+", "+dateString(syncs[syncIdx].date, false, false)+"</div> <div class='myButton2' id='noButton' onClick='hideSyncOverlay()'>Ausblenden</div>");
+			showSyncOverlay();
+			//console.log("show: "+$('#syncOverlay').html());
+			startSync();
+		}, millis());
+	}
+	function millis() {
+		//if(syncIdx == -1) return (3*60*1000 + 24000); //from start 17:58 to first Sync 3min24sec
+		if(syncIdx == -1) return (10000);
+		var millis = syncs[syncIdx].minutes*60*1000 + syncs[syncIdx].seconds*1000;
+		var nextMillis = syncs[syncIdx+1].minutes*60*1000 + syncs[syncIdx+1].seconds*1000;
+		console.log("wait: "+(nextMillis-millis));
+		return (nextMillis-millis);
+	}
+	function goToRange(startDateString, lat, lng) {
+		console.log("goToRange("+startDateString+")");
+		hideSyncOverlay();
+		hideDetailOverlay();
+		hideSumOverlay();
+		//set Month in Slider
+		goToDate = format.parse(startDateString);
+		slider.value(goToDate);
+		updateAllVis(goToDate);
+		//go to Marker
+		goToMarker = true;
+		if(lat && lng) goToMarkerPosition = new google.maps.LatLng(parseFloat(lat), parseFloat(lng));
+	}
+	function showSyncOverlay() {
+		$('#syncOverlay').show();
+	}
+	function hideSyncOverlay() {
+		$('#syncOverlay').hide();
+	}
+	function hideSyncStartDialog() {
+		$('#syncStart').hide();
+	}
+
+
+//******************************//
+//*** SUM BAR CHART ***//
+//******************************//
+	function drawSumBarChart() {		
+		var width = document.body.clientWidth-40; //-padding
+		var height = 100;
+		var x = d3.scale.linear()
+			.range([0, width]);
+			
+		if(request) request.abort();
+		request = d3.json("./api/events/sum/"+toDateString, function(error, data) {
+			if(error) return console.log("error in d3.json:"+error);
+			//console.log("DA: json for d3 barchart contains "+data.length+" objects");
+			
+			x.domain([0, 10599]); //10599 IS Tote am Ende (max Wert)
+			
+			d3.select("#barchartTitel")
+				.text(d3.sum(data, function(d) { return d; })+" Tote gesamt - Irak/Syrien");
+				
+			d3.select("#barchartDateRange")
+				.text(dateString(initFromDateString, false, false)+" - "+dateString(toDateString, false, false));
+			
+			var divs = d3.select(".d3_barchart")
+			  .selectAll("div")
+				.data(data)
+				.style("width", function(d) { return x(d) + "px"; })
+				.text(function(d) { return d; })
+			  .enter().append("div")
+			  	.style("font-size", "12px")
+			  	.style("padding", "2px")
+			  	.style("height", "25px")
+				.style("width", function(d) { return x(d) + "px"; })
+				.style("background-color", function(d, i) { return colorrange[i]; } )
+				.style("color", 'white')
+				.text(function(d) { return d; });
+		});
+	}
+	function showSumOverlay() {
+		$('#sumOverlay').show();
+	}
+	function hideSumOverlay() {
+		$('#sumOverlay').hide();
+	}
+
+
+//******************************//
+//*** DRAWINGS ON MAP ***//
+//******************************//	
+	function drawMarkers() {
+		//console.log("DA: drawmarkers()");
+		for (var i = 0; i < markers.length; i++) {
+			markers[i].setMap(null);
+		}
+		markers = [];
+		for (var idx in eventsByLoc) {
+			var div = document.createElement('div');
+			//draw d3 Pie Chart
+			var pieData = [{deaths:parseInt(eventsByLoc[idx].deaths_is)}, {deaths:parseInt(eventsByLoc[idx].deaths_geg)}, {deaths:parseInt(eventsByLoc[idx].deaths_civ)}, {deaths:parseInt(eventsByLoc[idx].deaths_unk)}];
+			addPieChart(div, pieData);
+			//add data to marker for reading in onAdd Cluster
+			$(div).data(pieData);				
+			//add Marker
+			var position = new google.maps.LatLng(parseFloat(eventsByLoc[idx].latitude), parseFloat(eventsByLoc[idx].longitude));
+			marker = new RichMarker({
+			  position: position,
+			  draggable: false,
+			  flat: true,
+			  anchor: RichMarkerPosition.MIDDLE,
+			  content: div
+			});
+			addListener(idx, marker);
+			console.log("add DetailWindow-Listener");
+			markers.push(marker);	
+		}
+		//clustering
+		if (markerClusterer) {
+			markerClusterer.clearMarkers();
+		}
+		markerClusterer = new MarkerClusterer(map, markers, {
+		  imagePath: './images/m',
+		  styles: [{
+			//url: './images/m1.png',
+			height: 50,
+			width: 50,
+			anchor: [0, 0],
+			textColor: '#000',
+			textSize: 14
+		  }]
+        });
+		/* ADD PIE CHART TO CLUSTER ICON */
+		ClusterIcon.prototype.onAdd = function() {
+			this.div_ = document.createElement('DIV');
+			if (this.visible_) {
+			  var pos = this.getPosFromLatLng_(this.center_);
+			  this.div_.style.cssText = this.createCss(pos);
+			  //this.div_.innerHTML = this.sums_.text;
+			}
+			
+			//if cluster icon should show
+			if(this.visible_) {
+				//console.log(this.cluster_.getMarkers());
+				var markers = this.cluster_.getMarkers();
+				var is = 0, geg = 0, civ = 0, unk = 0;
+				for (var idx in markers) {
+					var markerData = $(markers[idx].content).data();
+					is += markerData[0].deaths;
+					geg += markerData[1].deaths;
+					civ += markerData[2].deaths;
+					unk += markerData[3].deaths;
+				}
+				var pieData = [{deaths:is}, {deaths:geg}, {deaths:civ}, {deaths:unk}];
+				addPieChart(this.div_, pieData, this.sums_.text);
+			}
+		  
+			var panes = this.getPanes();
+			panes.overlayMouseTarget.appendChild(this.div_);
+		  
+			var that = this;
+			var isDragging = false;
+			google.maps.event.addDomListener(this.div_, 'click', function(event) {
+			  // Only perform click when not preceded by a drag
+			  if (!isDragging) {
+				that.triggerClusterClick(event);
+			  }
+			});
+			google.maps.event.addDomListener(this.div_, 'mousedown', function() {
+			  isDragging = false;
+			});
+			google.maps.event.addDomListener(this.div_, 'mousemove', function() {
+			  isDragging = true;
+			});
+		};
+		//commented out because of redrawing -> overdrawing d3 chart and number
+		ClusterIcon.prototype.setSums = function(sums) {
+		  this.sums_ = sums;
+		  this.text_ = sums.text;
+		  this.index_ = sums.index;
+		  if (this.div_) {  
+			//this.div_.innerHTML = sums.text;
+		  }
+		  this.useStyle();
+		};
+		
+		/* BUG FIX OF FUNCTION FOR IOS (Triggers the clusterclick event and zoom's if the option is set.) */
+		/*ClusterIcon.prototype.triggerClusterClick = function() {
+			var markerClusterer = this.cluster_.getMarkerClusterer();
+			google.maps.event.trigger(markerClusterer, 'clusterclick', this.cluster_);
+			if (markerClusterer.isZoomOnClick()) {
+				// modified zoom in function because of bug on iOS/iPhone6
+				this.map_.fitBounds(this.cluster_.getBounds());
+				if(this.map_.getBounds() != this.cluster_.getBounds()) {console.log("if"); this.map_.setZoom(this.map_.getZoom()+1)};
+			}
+		};*/
+		//SYNC if go and zoom to marker required
+		if(goToMarker) {
+			console.log("sync goToMarker");
+			for(idx in markers) {
+				if(goToMarkerPosition && markers[idx].getPosition().lat() == goToMarkerPosition.lat() && markers[idx].getPosition().lng() == goToMarkerPosition.lng()) {
+					google.maps.event.trigger(markers[idx], 'click');
+					map.setZoom(syncZoom);
+					map.panTo(goToMarkerPosition);
+					goToMarker = false;
+					goToMarkerPosition = null;
+				}
+			}
+			if(goToMarker) {
+				//Keine Daten zu diesem Ort und Zeitpunkt, daher einfach nur hinzoomen zu Ort
+				if(goToMarkerPosition) {
+					map.setZoom(syncZoom);
+					map.panTo(goToMarkerPosition);
+				//default zoom
+				} else {
+					map.setCenter(centerOfIraqSyria);
+					map.setZoom(5);
+				}
+				goToMarker = false;
+			}
+		}
+	}
+	function addPieChart(div, pieData, clusterNumber) {
+		var total = 0;
+		for(idx in pieData) {
+			total += pieData[idx].deaths;
+		}
+		var d3scale = d3.scale.linear()
+			.domain([smallestDeathsAllLocations, deathsAllLocations])
+    		.range([40, 80]); //35 mindestens
+		//console.log("total: "+total);
+		//console.log("d3scale(total): "+d3scale(total));
+		var width = d3scale(total),
+			height = d3scale(total),
+			radius = Math.min(width, height) / 2;
+		var arc = d3.svg.arc()
+			.outerRadius(radius - 10)
+			.innerRadius(0);
+		var pie = d3.layout.pie()
+			.sort(null)
+			.value(function(d) { return d.deaths; });
+		var svg = d3.select(div).append("svg")
+			.attr("width", width)
+			.attr("height", height)
+		  .append("g")
+			.attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+		var g = svg.selectAll(".arc")
+			.data(pie(pieData))
+		  .enter().append("g")
+			.attr("class", "arc");
+		g.append("path")
+			.attr("d", arc)
+			.style("fill", function(d, i) { return colorrange[i]; });
+		if(clusterNumber) {
+			var text = svg.append("text")
+				.attr("y", 6)
+				.attr("stroke", "white")
+				.attr("stroke-width", 1)
+				.attr("text-anchor", "middle")
+				.attr("font-size", "18px")
+				.text(clusterNumber);	
+		}
+	}
+	//MARKER LISTENER
+	function addListener(idx, object) {
+		object.addListener('click', function() {
+				updateDetailOverlay(idx, object);
+  		});	
+	}
+	
+	
+//******************************//
+//*** DETAIL SCREEN ***//
+//******************************//
+	function updateDetailOverlay(idx, object) {
+		console.log("detailView shown");
+		$('#detailOverlay').html("");
+		var divHeader = document.createElement('div');
+		divHeader.id = "divHeader";
+		divHeader.innerHTML = "<div class='backButton' onClick='hideDetailOverlay()'>&#10094; ZURÜCK</div><div class='titel'>"+parseInt(eventsByLoc[idx].best_est)+" Tote in "+eventsByLoc[idx].where_coordinates+"</div>";
+		
+		var divRangeDate = document.createElement('div');
+		divRangeDate.className = "divRangeDate";
+		divRangeDate.innerHTML = dateString(fromDateString, false, false);
+		
+		var w = document.body.clientWidth-40; //-padding
+		var h = 65;
+		var dataset = [ [{ x: 0, y: parseInt(eventsByLoc[idx].deaths_is) }], [{ x: 0, y: parseInt(eventsByLoc[idx].deaths_geg) }], [{ x: 0, y: parseInt(eventsByLoc[idx].deaths_civ) }], [{ x: 0, y: parseInt(eventsByLoc[idx].deaths_unk) }]
+		];
+		var stack = d3.layout.stack();
+		stack(dataset);
+		var xScale = d3.scale.linear()
+				.domain([0, parseInt(eventsByLoc[idx].best_est)])
+				.range([0, w]);
+		var divChart = document.createElement('div');
+		var svg = d3.select(divChart)
+			.append("svg")
+			.attr("width", w)
+			.attr("height", h);
+			
+		// Add a rect for each data value
+		var rects = svg.selectAll("rect")
+			.data(dataset)
+			.enter()
+			.append("rect")
+			.attr("x", function(d, i) { return xScale(d[0].y0); })
+			.attr("height", function(d) { return h; })
+			.attr("width", function(d, i) { return xScale(d[0].y); })
+			.style("fill", function(d, i) { return colorrange[i]; });
+			
+		var m = 0;
+		var labels = svg.selectAll("text")
+			.data(dataset)
+			.enter()
+			.append("text")
+			.attr("x", function(d, i) { return xScale(d[0].y0)+3; })
+			.attr("y", function(d, i) { m++; return 15*m; })
+			.text(function(d) { return d[0].y != 0 ? d[0].y : ""; })
+			.style("fill", "white");
+			
+		//add info on eventsByDate
+		var divText = document.createElement('div');
+		divText.id = "divText";
+		var string = "<p style='font-size:12px'>";
+		for (var i in eventsByDate) {
+			if(eventsByLoc[idx].latitude == eventsByDate[i].latitude && eventsByLoc[idx].longitude == eventsByDate[i].longitude) {
+				var konflikt = eventsByDate[i].dyad_name;
+				konflikt = konflikt.replace("-", "gegen");
+				konflikt = konflikt.replace("Civilians", "Zivilisten");
+				string += "<strong>"+dateString(eventsByDate[i].date_start, true, true)+" - "+konflikt+"</strong>";
+				if(eventsByDate[i].deaths_a != 0) string += "<br/>"+eventsByDate[i].side_a+": "+eventsByDate[i].deaths_a;
+				if(eventsByDate[i].deaths_b != 0) string += "<br/>"+eventsByDate[i].side_b+": "+eventsByDate[i].deaths_b;
+				if(eventsByDate[i].deaths_civilians != 0) string += "<br/>"+"Zivilisten: "+eventsByDate[i].deaths_civilians;
+				if(eventsByDate[i].deaths_unknown != 0) string += "<br/>"+"Unbekannt: "+eventsByDate[i].deaths_unknown;
+				if(i != eventsByDate.length-1) string += "<br/><br/>";
+			}
+		}
+		string = string.replace("Civilians", "Zivilisten");
+		divText.innerHTML = string+"</p>";
+		
+		divHeader.appendChild(divRangeDate);
+		divHeader.appendChild(divChart);
+		$('#detailOverlay').append(divHeader);
+		$('#detailOverlay').append(divText);
+		showDetailOverlay();
+		//map.setCenter(object.getPosition());
+	}
+	function showDetailOverlay() {
+		$('#detailOverlay').show();
+	}
+	function hideDetailOverlay() {
+		$('#detailOverlay').hide();
+	}
+	
+	
+	
+//******************************//
+//*** FOKUS GRAPH ***//
+//******************************//
+	function initFocusGraph() {				
+		var width = document.body.clientWidth;
+		var height = document.body.clientHeight*0.15;
+		x_1 = d3.time.scale()
+    		.range([0, width]);
+		var y_1 = d3.scale.linear()
+    		.range([height, 0]);
+		var svg = d3.select(".d3_chart").append("svg")
+			.attr("width", width)
+			.attr("height", height)
+		focus = svg.append("g")
+			.attr("class", "focus");
+			
+		d3.json("./api/timeline", function(error, data) {
+			if(error) return console.log("error in d3.json:"+error);
+			//console.log("DA: json for d3 graph contains "+data.length+" objects");
+			data.forEach(function(d) {
+			  d.date = format.parse(d.date);
+			});
+			
+			initSlider(data);
+			
+			var range = initRangeDateString.split("_");
+			var extent0 = format.parse(range[0]);
+			var extent1 = format.parse(range[1]);	
+			lastExtent = [extent0, extent1];
+					
+			var stack = d3.layout.stack()
+				.offset("silhouette")
+				.values(function(d) { return d.values; })
+				.x(function(d) { return d.date; })
+				.y(function(d) { return d.value; });
+			var nest = d3.nest()
+    			.key(function(d) { return d.key; });
+			var layers = stack(nest.entries(data));
+		 	//console.log(layers);
+			
+			x_1.domain(lastExtent);
+			y_1.domain([0, d3.max(data, function(d) { return d.y0 + d.y; })]);
+			
+			area = d3.svg.area()
+				.interpolate("cardinal")
+				.x(function(d) { return x_1(d.date); })
+				.y0(function(d) { return y_1(d.y0); })
+				.y1(function(d) { return y_1(d.y0 + d.y); });
+		  	
+			focus.selectAll(".layer")
+				.data(layers)
+			  .enter().append("path")
+				.attr("class", "layer")
+				.attr("d", function(d) { return area(d.values); })
+				.style("fill", function(d, i) { return colorrange[i]; });
+
+			focus.append("text")
+				.attr("class", "focusText")
+				.attr("id", "focusTextLeft")
+				.attr("x", width/2)
+				.attr("y", 15)
+				.attr("text-anchor", "middle")
+				.style("font-weight", "bold")
+				.text(dateString(fromDateString, false, false));
+		});
+	}
+	
+	
+	
+//******************************//
+//*** TIMELINE SLIDER ***//
+//******************************//
+	function initSlider(data) {
+		var monthMillis = 2669759999.99402; //30,9 Tage
+		var fromSlider = new Date();
+		fromSlider.setFullYear(2010, 0, 1, 0, 0, 0);
+		var toSlider = new Date();
+		toSlider.setFullYear(2014, 11, 31, 0, 0, 0);
+		var extentSlider = [fromSlider, toSlider];
+		slider = d3.slider()
+				  .scale( d3.time.scale().domain( extentSlider ) )
+				  .margin(0)
+				  .axis( d3.svg.axis() )
+				  .step(monthMillis) 	
+				  .on("slide", function(evt, value) {
+						//console.log("value Date: "+new Date(value).toString());
+						var selectedDate = new Date(value);
+						updateAllVis(selectedDate);
+				   });
+		d3.select('#d3_slider').call( slider );
+	}
+	function updateAllVis(selectedDate) {
+		var fromDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+		var toDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth()+1, 0);
+		x_1.domain([fromDate, toDate]);
+		//console.log("x_1.domain(): "+x_1.domain());
+		focus.selectAll(".layer").attr("d", function(d) { return area(d.values); });
+		//reload data for map
+		fromDate.setDate(fromDate.getDate() + 1);
+		fromDateString = fromDate.toISOString().substring(0, 10);
+		toDateString = toDate.toISOString().substring(0, 10);
+		fromToDateString = fromDateString+"_"+toDateString;
+		initMapData(fromToDateString);
+		focus.select("#focusTextLeft").text(dateString(fromDateString, false, false));
+		//update sum chart in background
+		drawSumBarChart();	
+	}
+	
+	
+//******************************//
+//*** CUSTOM CONTROLS IN MAP ***//
+//******************************//
+	function CenterMapControl(controlDiv) {
+		  // Set CSS for the control border
+		  var goCenterUI = document.createElement('div');
+		  goCenterUI.id = 'goCenterUI';
+		  goCenterUI.title = 'Click to recenter the map';
+		  controlDiv.appendChild(goCenterUI);
+		  // Set CSS for the control interior
+		  var goCenterText = document.createElement('div');
+		  goCenterText.id = 'goCenterText';
+		  goCenterText.innerHTML = '<img src="images/globe-with-grid.png" width="30" height="30">';
+		  goCenterUI.appendChild(goCenterText);
+		  goCenterUI.addEventListener('click', function() {
+				map.setCenter(centerOfIraqSyria);
+				map.setZoom(startZoom);
+		  });
+		  return controlDiv;
+	}
+	function ShowSumControl(controlDiv) {
+		  // Set CSS for the control border
+		  var goCenterUI = document.createElement('div');
+		  goCenterUI.id = 'showSumUI';
+		  goCenterUI.title = 'Click to show deaths sum';
+		  controlDiv.appendChild(goCenterUI);
+		  // Set CSS for the control interior
+		  var goCenterText = document.createElement('div');
+		  goCenterText.id = 'showSumText';
+		  goCenterText.innerHTML = '<img src="images/summary-icon.png" width="30" height="30">';
+		  goCenterUI.appendChild(goCenterText);
+		  goCenterUI.addEventListener('click', function() {
+				showSumOverlay();
+		  });
+		  return controlDiv;
+	}
+	
+//******************************//
+//*** LEGENDE ***//
+//******************************//
+	//Legende (library d3.legend)	
+	function initLegend() {	          
+		var ordinal = d3.scale.ordinal()
+		  .domain(["IS", "Gegner", "Zivilisten", "Unbekannt"])
+		  .range(colorrange);
+		var svg = d3.select("#legend").append("svg")
+			.attr("width", 300)
+			.attr("height", 30);
+		svg.append("g")
+			.attr("class", "legendOrdinal")
+			.attr("transform", "translate(80,0)")
+			.style("font-size", "10px");
+		var legendOrdinal = d3.legend.color()
+		  .shape('rect')
+		  .shapePadding(40)
+		  .shapeWidth(7)
+		  .shapeHeight(7)
+		  .labelOffset(7)
+		  .labelAlign('middle')
+		  .orient('horizontal')
+		  .scale(ordinal);
+		svg.select(".legendOrdinal")
+		  .call(legendOrdinal);
+	}	
+		
+	</script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCOLQ4CngCaBQeCVLtHk6d44OThqiIeIe8&callback=init"></script>
+  </body>
+</html>
